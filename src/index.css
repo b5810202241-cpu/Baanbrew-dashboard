@@ -1,39 +1,61 @@
 @import "tailwindcss";
 
-/* สีของ Dashboard (สลับอัตโนมัติตามโหมดสว่าง/มืดของเครื่อง) */
+/* สีของ Dashboard: ม่วงเป็นสีข้อมูล น้ำตาลกาแฟเป็นสีหัวข้อ พื้นครีมอุ่น
+   สลับอัตโนมัติตามโหมดสว่าง/มืดของเครื่อง */
 :root {
   color-scheme: light;
-  --page: #f6f5f2;
-  --surface: #fcfcfb;
-  --border: #e4e2dc;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #7a7974;
-  --grid: #e9e7e1;
-  --series-1: #2a78d6;
+  --page: #fdfaf2;
+  --surface: #ffffff;
+  --header: #ffffff;
+  --border: #ebe5d8;
+  --text-primary: #16130f;
+  --text-secondary: #4f4a42;
+  --text-muted: #7a7368;
+  --brand: #7a3b12;
+  --grid: #f0ebe0;
+  --series-1: #7e2bd0;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --page: #111110;
-    --surface: #1a1a19;
-    --border: #2e2e2b;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #8f8e86;
-    --grid: #2a2a27;
-    --series-1: #3987e5;
+    --page: #14120f;
+    --surface: #1d1a16;
+    --header: #1d1a16;
+    --border: #332e27;
+    --text-primary: #fbf8f2;
+    --text-secondary: #cfc7b8;
+    --text-muted: #978f82;
+    --brand: #e7b287;
+    --grid: #2b2721;
+    --series-1: #9f6cea;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #14120f;
+  --surface: #1d1a16;
+  --header: #1d1a16;
+  --border: #332e27;
+  --text-primary: #fbf8f2;
+  --text-secondary: #cfc7b8;
+  --text-muted: #978f82;
+  --brand: #e7b287;
+  --grid: #2b2721;
+  --series-1: #9f6cea;
 }
 
 @theme inline {
   --color-page: var(--page);
   --color-surface: var(--surface);
+  --color-header: var(--header);
   --color-line: var(--border);
   --color-ink: var(--text-primary);
   --color-ink-2: var(--text-secondary);
   --color-ink-3: var(--text-muted);
+  --color-brand: var(--brand);
+  --color-series: var(--series-1);
 }
 
 body {

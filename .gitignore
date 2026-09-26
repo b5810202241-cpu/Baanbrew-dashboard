@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ภาพหน้าจอที่ Claude ส่งมา ไม่ต้องขึ้น GitHub
+Claude outputs/

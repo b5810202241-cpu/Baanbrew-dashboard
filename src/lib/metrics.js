@@ -8,6 +8,7 @@ export function cleanRows(rawRows) {
       orderId: (r.order_id ?? '').trim(),
       datetime: (r.datetime ?? '').trim(),
       branch: (r.branch ?? '').trim(),
+      productId: (r.product_id ?? '').trim(),
       qty: Number(r.qty),
       unitPrice: Number(r.unit_price),
       customerId: (r.customer_id ?? '').trim(), // '' = ลูกค้าทั่วไป
@@ -77,6 +78,63 @@ export function withMovingAverage(daily, window = 7) {
   })
 }
 
+/** จำนวนสินค้าที่ขายได้ (แก้ว/ชิ้น) = ผลรวม qty ทุกแถว */
+export function totalQuantity(rows) {
+  return rows.reduce((sum, r) => sum + r.qty, 0)
+}
+
+/** ยอดขายเฉลี่ยต่อวัน = ยอดขายรวม ÷ จำนวนวันที่มียอดขาย */
+export function averageDailyRevenue(daily) {
+  if (daily.length === 0) return 0
+  return daily.reduce((sum, d) => sum + d.revenue, 0) / daily.length
+}
+
+/** วันที่ขายดีที่สุด = วันที่มี revenue สูงสุดใน dailyRevenue → { date, revenue } */
+export function bestDay(daily) {
+  return daily.reduce((best, d) => (best === null || d.revenue > best.revenue ? d : best), null)
+}
+
+/** สินค้าขายดี n อันดับ: รวมยอดตาม product_id เรียงมากไปน้อย แล้วตัดเอา n ตัวแรก → [{ productId, revenue, qty }] */
+export function topProducts(rows, n = 8) {
+  const byProduct = new Map()
+  for (const r of rows) {
+    const cur = byProduct.get(r.productId) ?? { productId: r.productId, revenue: 0, qty: 0 }
+    cur.revenue += lineRevenue(r)
+    cur.qty += r.qty
+    byProduct.set(r.productId, cur)
+  }
+  return [...byProduct.values()].sort((a, b) => b.revenue - a.revenue).slice(0, n)
+}
+
+/**
+ * ยอดขายตามช่วงเวลา (รายชั่วโมง รวมทุกวัน)
+ * ชั่วโมง = ตัวอักษรตำแหน่ง 11–12 ของ datetime (เช่น "2025-04-01T18:48:40+07:00" → 18) เป็นเวลาไทยอยู่แล้ว
+ * เติมชั่วโมงที่ไม่มียอดเป็น 0 ระหว่างชั่วโมงแรกถึงชั่วโมงสุดท้าย → [{ hour, label: "08:00", revenue }]
+ */
+export function revenueByHour(rows) {
+  const byHour = new Map()
+  for (const r of rows) {
+    const hour = Number(r.datetime.slice(11, 13))
+    if (!Number.isInteger(hour)) continue
+    byHour.set(hour, (byHour.get(hour) ?? 0) + lineRevenue(r))
+  }
+  if (byHour.size === 0) return []
+  const hours = [...byHour.keys()]
+  const result = []
+  for (let h = Math.min(...hours); h <= Math.max(...hours); h++) {
+    result.push({ hour: h, label: `${String(h).padStart(2, '0')}:00`, revenue: byHour.get(h) ?? 0 })
+  }
+  return result
+}
+
+/** คอลัมน์ที่ไฟล์ CSV ต้องมี ใช้ตรวจไฟล์ที่ผู้ใช้อัปโหลด */
+export const REQUIRED_COLUMNS = ['order_id', 'datetime', 'branch', 'product_id', 'qty', 'unit_price', 'customer_id']
+
+/** คืนรายชื่อคอลัมน์ที่ขาดไป (อาร์เรย์ว่าง = ครบ) */
+export function missingColumns(fields = []) {
+  return REQUIRED_COLUMNS.filter((c) => !fields.includes(c))
+}
+
 /** ยอดขายแยกสาขา: รวมยอดตาม branch แล้วเรียงจากมากไปน้อย → [{ branch, revenue }] */
 export function revenueByBranch(rows) {
   const byBranch = new Map()
@@ -92,14 +150,20 @@ export function revenueByBranch(rows) {
 /** คำนวณทุกค่าที่ Dashboard ใช้ในครั้งเดียว */
 export function computeDashboard(rawRows) {
   const rows = cleanRows(rawRows)
+  const daily = dailyRevenue(rows)
   return {
     rowCount: rows.length,
     totalRevenue: totalRevenue(rows),
     orderCount: orderCount(rows),
     averageOrderValue: averageOrderValue(rows),
     uniqueMembers: uniqueMemberCount(rows),
-    daily: withMovingAverage(dailyRevenue(rows)),
+    totalQuantity: totalQuantity(rows),
+    averageDailyRevenue: averageDailyRevenue(daily),
+    bestDay: bestDay(daily),
+    daily: withMovingAverage(daily),
     byBranch: revenueByBranch(rows),
+    topProducts: topProducts(rows, 8),
+    byHour: revenueByHour(rows),
   }
 }
 
@@ -117,6 +181,13 @@ export const formatNumber = (n) => intFmt.format(n)
 /** เงินบาท เช่น ฿4,466,821 หรือ ฿128.39 เมื่อ decimals = true */
 export const formatBaht = (n, decimals = false) =>
   `฿${(decimals ? moneyFmt : intFmt).format(n)}`
+
+/** เงินบาทแบบย่อสำหรับแกนกราฟ เช่น ฿7.5k, ฿1.2M */
+export function formatBahtCompact(n) {
+  if (Math.abs(n) >= 1_000_000) return `฿${+(n / 1_000_000).toFixed(1)}M`
+  if (Math.abs(n) >= 1_000) return `฿${+(n / 1_000).toFixed(1)}k`
+  return `฿${n}`
+}
 
 /** แปลง "2025-04-01" เป็นวันที่ภาษาไทย (ไม่ผ่าน timezone ของเครื่อง) */
 export function formatThaiDate(dateKey, options = { day: 'numeric', month: 'short', year: '2-digit' }) {
