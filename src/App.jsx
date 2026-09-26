@@ -61,7 +61,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    load(`/${DEFAULT_FILE}`, DEFAULT_FILE)
+    load(`${import.meta.env.BASE_URL}${DEFAULT_FILE}`, DEFAULT_FILE)
   }, [load])
 
   const onUpload = (e) => {
