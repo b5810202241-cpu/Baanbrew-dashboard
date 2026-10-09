@@ -2,7 +2,8 @@ import { formatBaht } from '../lib/metrics'
 
 // กล่อง tooltip ร่วมของกราฟ: ชื่อ (วันที่/สาขา) + ยอดขายของแต่ละเส้น
 // mutedKeys = dataKey ของเส้นที่แสดงแบบจาง (เช่น ยอดรายวัน) ให้จุดสีใน tooltip จางตาม
-export default function ChartTooltip({ active, payload, label, labelFormatter, mutedKeys = [] }) {
+// valueFormatter = รูปแบบตัวเลข (ค่าเริ่มต้นเป็นเงินบาท)
+export default function ChartTooltip({ active, payload, label, labelFormatter, mutedKeys = [], valueFormatter = formatBaht }) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-lg border border-line bg-surface px-3 py-2 text-sm shadow-md">
@@ -19,7 +20,7 @@ export default function ChartTooltip({ active, payload, label, labelFormatter, m
               style={{ background: entry.stroke ?? entry.color ?? 'var(--series-1)', opacity: muted ? 0.35 : 1 }}
             />
             {entry.name ? `${entry.name}: ` : ''}
-            {formatBaht(entry.value)}
+            {valueFormatter(entry.value)}
           </p>
         )
       })}

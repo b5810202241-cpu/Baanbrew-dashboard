@@ -20,6 +20,27 @@ export function cleanRows(rawRows) {
         Number.isFinite(r.qty) &&
         Number.isFinite(r.unitPrice),
     )
+    .map((r) => ({
+      ...r,
+      revenue: r.qty * r.unitPrice,          // ยอดขายของแถว
+      date: r.datetime.slice(0, 10),         // วันที่ตามเวลาไทย YYYY-MM-DD
+      hour: Number(r.datetime.slice(11, 13)), // ชั่วโมงตามเวลาไทย
+      product_id: r.productId,               // ชื่อแบบ snake_case ให้ใช้กับ lab2Metrics.js ได้
+      customer_id: r.customerId,
+    }))
+}
+
+/** ชื่อที่ Lab 2.2 ใช้: rows ที่มี revenue, date, hour พร้อมใช้ */
+export const prepareRows = cleanRows
+
+/**
+ * กรองแถวตามตัวกรองบนหน้า Dashboard
+ * branch = '' คือทุกสาขา · from/to = 'YYYY-MM-DD' หรือ '' (ไม่จำกัด) · เทียบเป็นข้อความได้เพราะรูปแบบเดียวกัน
+ */
+export function filterRows(rows, { branch = '', from = '', to = '' } = {}) {
+  return rows.filter(
+    (r) => (!branch || r.branch === branch) && (!from || r.date >= from) && (!to || r.date <= to),
+  )
 }
 
 /** ยอดขายของ 1 แถว = qty × unit_price */
@@ -149,7 +170,11 @@ export function revenueByBranch(rows) {
 
 /** คำนวณทุกค่าที่ Dashboard ใช้ในครั้งเดียว */
 export function computeDashboard(rawRows) {
-  const rows = cleanRows(rawRows)
+  return computeFromRows(cleanRows(rawRows))
+}
+
+/** เหมือน computeDashboard แต่รับแถวที่ผ่าน cleanRows แล้ว (ใช้หลังกรองตามสาขา/วันที่) */
+export function computeFromRows(rows) {
   const daily = dailyRevenue(rows)
   return {
     rowCount: rows.length,

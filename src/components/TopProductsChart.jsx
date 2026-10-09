@@ -4,6 +4,23 @@ import { productName } from '../lib/products'
 import ChartTooltip from './ChartTooltip'
 import useIsMobile from '../hooks/useIsMobile'
 
+// ตัดชื่อยาวให้สั้นลงพร้อม "…" นับเป็นตัวอักษรที่มองเห็น (สระ/วรรณยุกต์ไทยไม่นับแยก)
+const seg = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('th', { granularity: 'grapheme' }) : null
+function shorten(text, max) {
+  const chars = seg ? [...seg.segment(text)].map((s) => s.segment) : [...text]
+  return chars.length > max ? chars.slice(0, max - 1).join('') + '…' : text
+}
+
+// ป้ายชื่อเมนูบนแกน Y: ชิดขวา ตัดชื่อที่ยาวเกิน (ชื่อเต็มดูได้ใน tooltip)
+function NameTick({ x, y, payload, maxChars, fontSize }) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={fontSize} fill="var(--text-secondary)">
+      <title>{payload.value}</title>
+      {shorten(payload.value, maxChars)}
+    </text>
+  )
+}
+
 // เมนูขายดี: แท่งแนวนอน เรียงจากมากไปน้อย (ข้อมูลเรียงมาแล้วจาก topProducts ใน metrics.js)
 export default function TopProductsChart({ data }) {
   const isMobile = useIsMobile()
@@ -19,8 +36,8 @@ export default function TopProductsChart({ data }) {
           <YAxis
             type="category"
             dataKey="name"
-            width={isMobile ? 72 : 88}
-            tick={{ fill: 'var(--text-secondary)', fontSize: isMobile ? 12 : 13 }}
+            width={isMobile ? 100 : 150}
+            tick={<NameTick maxChars={isMobile ? 11 : 20} fontSize={isMobile ? 11 : 13} />}
             tickLine={false}
             axisLine={false}
           />
