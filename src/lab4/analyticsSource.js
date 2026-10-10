@@ -13,6 +13,9 @@ export const analyticsSource = {
   async loadAnalytics() {
     const snaps = await Promise.all(DOC_IDS.map((id) => getDoc(doc(db, "analytics", id))));
     const data = Object.fromEntries(DOC_IDS.map((id, i) => [id, snaps[i].data()]));
+    // meta.builtAt เป็น Firestore Timestamp (จาก serverTimestamp() ของ pipeline) แปลงเป็น ISO string
+    // ก่อนส่งให้ UI เพราะ new Date(Timestamp) ตรงๆ จะได้ Invalid Date
+    if (data.meta?.builtAt?.toDate) data.meta = { ...data.meta, builtAt: data.meta.builtAt.toDate().toISOString() };
     return { reads: DOC_IDS.length, ...data };
   },
 };
