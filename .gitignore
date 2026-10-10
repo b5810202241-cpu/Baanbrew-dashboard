@@ -25,3 +25,11 @@ dist-ssr
 
 # ภาพหน้าจอที่ Claude ส่งมา ไม่ต้องขึ้น GitHub
 Claude outputs/
+
+# Firebase (Lab 3)
+.env
+.env.local
+secrets/
+import-summary.json
+.firebase/
+*-firebase-adminsdk-*.json

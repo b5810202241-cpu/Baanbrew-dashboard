@@ -1,0 +1,92 @@
+rules_version = '2';
+
+// Lab 3.3 · Security Rules จริง (แทนที่โหมดทดสอบ)
+// เป้าหมาย: แท็บ "ทดสอบ Rules" ต้องได้ ✅ ทุกข้อ และฟอร์มบันทึกยอดขายปกติยังใช้งานได้
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // อ้างอิงจาก BRANCHES / PAYMENTS ใน src/lab3/saleModel.js ต้องแก้พร้อมกันถ้าค่าที่นั่นเปลี่ยน
+    function branches() {
+      return ['สยาม', 'สีลม', 'อารีย์', 'บางนา', 'มหาวิทยาลัย'];
+    }
+    function paymentMethods() {
+      return ['QR พร้อมเพย์', 'บัตรเครดิต', 'เงินสด', 'LINE MAN', 'Grab'];
+    }
+    // ฟิลด์ทั้งหมดที่ buildSale() ใน saleModel.js สร้าง บวก created_at ที่ SaleForm ใส่เพิ่มตอน setDoc
+    function saleFields() {
+      return [
+        'order_id', 'datetime', 'date', 'hour', 'branch', 'product_id', 'qty',
+        'unit_price', 'revenue', 'customer_id', 'payment_method', 'channel',
+        'source', 'created_by', 'created_at',
+      ];
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ราคาต่อหน่วยต้องตรงกับราคาจริงของเมนูนั้นใน products เสมอ กันลูกค้าแก้ราคาเองจากฟอร์ม
+    function priceMatches(data) {
+      return data.unit_price ==
+        get(/databases/$(database)/documents/products/$(data.product_id)).data.price;
+    }
+
+    function isValidSale(data) {
+      return
+        // ต้องมีฟิลด์ครบทุกตัวที่ buildSale() สร้าง (hasAll) และห้ามมีฟิลด์อื่นปนมาเพิ่ม (hasOnly)
+        // เช่น แอบใส่ discount มาด้วยจะถูกปฏิเสธทันที
+        data.keys().hasAll(saleFields()) && data.keys().hasOnly(saleFields()) &&
+        // ต้องติดป้ายว่ามาจากฟอร์มเว็บ (ไม่ใช่ import สคริปต์) และผู้บันทึกต้องเป็นคนที่ล็อกอินอยู่จริง
+        // ห้ามส่ง created_by เป็น uid ของคนอื่นเพื่อสวมรอย
+        data.source == 'web' &&
+        data.created_by == request.auth.uid &&
+        // เวลาบันทึกต้องมาจากนาฬิกาเซิร์ฟเวอร์เท่านั้น (serverTimestamp() ทำให้เท่ากับ request.time)
+        // ห้ามไคลเอนต์ปลอมเวลาเอง เช่น ส่งเป็นปี 2000
+        data.created_at == request.time &&
+        // สาขาต้องเป็น 1 ใน 5 สาขาที่มีจริง และวิธีชำระเงินต้องเป็น 1 ใน 5 แบบที่ระบบรองรับ
+        data.branch in branches() &&
+        data.payment_method in paymentMethods() &&
+        // จำนวนต้องเป็นจำนวนเต็มบวกไม่เกิน MAX_QTY (1-20) ตามที่ validateSaleForm บังคับไว้แล้วฝั่งฟอร์ม
+        data.qty is int && data.qty >= 1 && data.qty <= 20 &&
+        // ชั่วโมงต้องเป็นจำนวนเต็มในช่วงที่มีจริงของวันเดียว (0-23)
+        data.hour is int && data.hour >= 0 && data.hour <= 23 &&
+        // ราคาต่อหน่วยต้องตรงกับราคาจริงในเมนู (เทียบกับ products/{product_id} ด้วย get())
+        priceMatches(data) &&
+        // ยอดขายต้องเท่ากับจำนวน × ราคาต่อหน่วยเป๊ะ ๆ ห้ามส่งยอดที่คำนวณไม่ตรงสูตรมาเอง
+        data.revenue == data.qty * data.unit_price &&
+        // date ต้องเป็นรูปแบบ YYYY-MM-DD และ datetime ต้องเป็นเวลาไทย YYYY-MM-DDTHH:MM:SS+07:00
+        // เท่านั้น (ตรงกับที่ nowBangkokISO ใน time.js สร้าง) ห้ามเป็น UTC หรือรูปแบบอื่น
+        data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.datetime.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\+07:00$') &&
+        // รหัสสมาชิก: ไม่ใส่ได้ (ต้องเป็น null ไม่ใช่สตริงว่าง) หรือถ้าใส่ต้องเป็น C ตามด้วยเลข 5 หลักเท่านั้น
+        (data.customer_id == null || data.customer_id.matches('^C[0-9]{5}$'));
+    }
+
+    // เมนูอาหาร/เครื่องดื่ม: อ่านได้เฉพาะคนที่ล็อกอิน แก้ไขได้เฉพาะสคริปต์ seed ฝั่งแอดมิน (service account ข้าม rules นี้อยู่แล้ว)
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ข้อมูลสาขา: เงื่อนไขเดียวกับ products
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ยอดขาย: อ่านได้เมื่อล็อกอิน, สร้างได้เมื่อล็อกอินและข้อมูลผ่าน isValidSale(), ห้ามแก้ไขหรือลบเด็ดขาด
+    // (ของจริงต้องคงอยู่ตลอดเพื่อความถูกต้องของบัญชี แก้ยอดผิดให้สร้างรายการใหม่แทน)
+    match /sales/{saleId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidSale(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // Lab 4.2C · ผลวิเคราะห์ (meta/daily/rfm/cohort/abc): อ่านได้เมื่อล็อกอิน เขียนไม่ได้จากหน้าเว็บ
+    // (scripts/build-analytics.mjs ใช้ firebase-admin ซึ่งข้าม rules นี้อยู่แล้ว)
+    match /analytics/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+  }
+}
